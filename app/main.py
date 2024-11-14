@@ -1,21 +1,9 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Request, Body
 import json
-from typing import List
+from typing import List, Optional
 
 # Creamos la aplicación FastAPI
 app = FastAPI()
-
-# Definimos el esquema de lectura y respuesta del "Item" usando Pydantic
-class Item(BaseModel):
-    id: int
-    name: str
-    description: str | None = None
-
-# Definimos el esquema de creación de un nuevo "Item" sin el campo "id"
-class ItemCreate(BaseModel):
-    name: str
-    description: str | None = None
 
 # Función auxiliar para leer los datos del archivo JSON
 def read_data():
@@ -31,7 +19,7 @@ def write_data(data):
         json.dump(data, file, indent=4)
 
 # Endpoint para obtener todos los ítems (GET)
-@app.get("/items/", response_model=List[Item])
+@app.get("/items/")
 def get_items():
     """
     Devuelve una lista de todos los ítems.
@@ -40,7 +28,7 @@ def get_items():
     return items
 
 # Endpoint para obtener un ítem específico por su ID (GET)
-@app.get("/items/{item_id}", response_model=Item)
+@app.get("/items/{item_id}")
 def get_item(item_id: int):
     """
     Devuelve un ítem específico basado en su ID.
@@ -52,17 +40,26 @@ def get_item(item_id: int):
     raise HTTPException(status_code=404, detail="Item no encontrado")
 
 # Endpoint para crear un nuevo ítem (POST)
-@app.post("/items/", response_model=Item)
-def create_item(item: ItemCreate):
+@app.post("/items/")
+def create_item(item: dict = Body(..., example={"name": "Nuevo Item", "description": "Descripción del nuevo ítem"})):
     """
     Crea un nuevo ítem y lo añade al archivo JSON.
     """
     items = read_data()
     
+    # Validación manual de datos
+    if "name" not in item or not isinstance(item["name"], str):
+        raise HTTPException(status_code=400, detail="El campo 'name' es obligatorio y debe ser una cadena de texto.")
+    if "description" in item and not isinstance(item["description"], str):
+        raise HTTPException(status_code=400, detail="El campo 'description' debe ser una cadena de texto o estar ausente.")
+    
     # Generar un ID único para el nuevo ítem
     new_id = max([item["id"] for item in items], default=0) + 1
-    new_item = item.dict()  # Convertir el ítem a un diccionario
-    new_item["id"] = new_id  # Asignar el nuevo ID
+    new_item = {
+        "id": new_id,
+        "name": item["name"],
+        "description": item.get("description")  # Añadir descripción si está presente
+    }
     
     # Añadir el nuevo ítem a la lista y guardar
     items.append(new_item)
@@ -71,19 +68,27 @@ def create_item(item: ItemCreate):
     return new_item
 
 # Endpoint para actualizar un ítem existente (PUT)
-@app.put("/items/{item_id}", response_model=Item)
-def update_item(item_id: int, updated_item: ItemCreate):
+@app.put("/items/{item_id}")
+def update_item(item_id: int, updated_item: dict = Body(..., example={"name": "Item Actualizado", "description": "Descripción actualizada"})):
     """
     Actualiza un ítem existente basado en su ID.
     """
     items = read_data()
+
+    # Validación manual de datos
+    if "name" not in updated_item or not isinstance(updated_item["name"], str):
+        raise HTTPException(status_code=400, detail="El campo 'name' es obligatorio y debe ser una cadena de texto.")
+    if "description" in updated_item and not isinstance(updated_item["description"], str):
+        raise HTTPException(status_code=400, detail="El campo 'description' debe ser una cadena de texto o estar ausente.")
+
+    # Buscar y actualizar el ítem
     for index, item in enumerate(items):
         if item["id"] == item_id:
-            # Actualizar el ítem manteniendo el mismo ID
-            items[index] = updated_item.dict()
-            items[index]["id"] = item_id  # Mantener el ID original
+            items[index]["name"] = updated_item["name"]
+            items[index]["description"] = updated_item.get("description")
             write_data(items)
             return items[index]
+    
     raise HTTPException(status_code=404, detail="Item no encontrado")
 
 # Endpoint para eliminar un ítem (DELETE)

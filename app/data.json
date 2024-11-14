@@ -8,5 +8,10 @@
         "name": "test-1",
         "description": "description-test-1",
         "id": 2
+    },
+    {
+        "id": 3,
+        "name": "Nuevo Item",
+        "description": "Descripci\u00f3n del nuevo \u00edtem"
     }
 ]
