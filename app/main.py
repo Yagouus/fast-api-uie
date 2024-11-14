@@ -1,48 +1,102 @@
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
-from . import crud, models, schemas
-from .database import SessionLocal, engine
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import json
+from typing import List
 
-# Crear la base de datos
-models.Base.metadata.create_all(bind=engine)
-
+# Creamos la aplicación FastAPI
 app = FastAPI()
 
-# Dependencia para la sesión de la base de datos
-def get_db():
-    db = SessionLocal()
+# Definimos el esquema de lectura y respuesta del "Item" usando Pydantic
+class Item(BaseModel):
+    id: int
+    name: str
+    description: str | None = None
+
+# Definimos el esquema de creación de un nuevo "Item" sin el campo "id"
+class ItemCreate(BaseModel):
+    name: str
+    description: str | None = None
+
+# Función auxiliar para leer los datos del archivo JSON
+def read_data():
     try:
-        yield db
-    finally:
-        db.close()
+        with open("app/data.json", "r") as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return []
 
-# Endpoints CRUD
-@app.post("/items/", response_model=schemas.Item)
-def create_item(item: schemas.ItemCreate, db: Session = Depends(get_db)):
-    return crud.create_item(db=db, item=item)
+# Función auxiliar para escribir datos en el archivo JSON
+def write_data(data):
+    with open("app/data.json", "w") as file:
+        json.dump(data, file, indent=4)
 
-@app.get("/items/", response_model=list[schemas.Item])
-def read_items(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    items = crud.get_items(db, skip=skip, limit=limit)
+# Endpoint para obtener todos los ítems (GET)
+@app.get("/items/", response_model=List[Item])
+def get_items():
+    """
+    Devuelve una lista de todos los ítems.
+    """
+    items = read_data()
     return items
 
-@app.get("/items/{item_id}", response_model=schemas.Item)
-def read_item(item_id: int, db: Session = Depends(get_db)):
-    db_item = crud.get_item(db, item_id=item_id)
-    if db_item is None:
-        raise HTTPException(status_code=404, detail="Item not found")
-    return db_item
+# Endpoint para obtener un ítem específico por su ID (GET)
+@app.get("/items/{item_id}", response_model=Item)
+def get_item(item_id: int):
+    """
+    Devuelve un ítem específico basado en su ID.
+    """
+    items = read_data()
+    for item in items:
+        if item["id"] == item_id:
+            return item
+    raise HTTPException(status_code=404, detail="Item no encontrado")
 
-@app.put("/items/{item_id}", response_model=schemas.Item)
-def update_item(item_id: int, item: schemas.ItemUpdate, db: Session = Depends(get_db)):
-    db_item = crud.update_item(db, item_id=item_id, item=item)
-    if db_item is None:
-        raise HTTPException(status_code=404, detail="Item not found")
-    return db_item
+# Endpoint para crear un nuevo ítem (POST)
+@app.post("/items/", response_model=Item)
+def create_item(item: ItemCreate):
+    """
+    Crea un nuevo ítem y lo añade al archivo JSON.
+    """
+    items = read_data()
+    
+    # Generar un ID único para el nuevo ítem
+    new_id = max([item["id"] for item in items], default=0) + 1
+    new_item = item.dict()  # Convertir el ítem a un diccionario
+    new_item["id"] = new_id  # Asignar el nuevo ID
+    
+    # Añadir el nuevo ítem a la lista y guardar
+    items.append(new_item)
+    write_data(items)
+    
+    return new_item
 
+# Endpoint para actualizar un ítem existente (PUT)
+@app.put("/items/{item_id}", response_model=Item)
+def update_item(item_id: int, updated_item: ItemCreate):
+    """
+    Actualiza un ítem existente basado en su ID.
+    """
+    items = read_data()
+    for index, item in enumerate(items):
+        if item["id"] == item_id:
+            # Actualizar el ítem manteniendo el mismo ID
+            items[index] = updated_item.dict()
+            items[index]["id"] = item_id  # Mantener el ID original
+            write_data(items)
+            return items[index]
+    raise HTTPException(status_code=404, detail="Item no encontrado")
+
+# Endpoint para eliminar un ítem (DELETE)
 @app.delete("/items/{item_id}")
-def delete_item(item_id: int, db: Session = Depends(get_db)):
-    result = crud.delete_item(db, item_id=item_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Item not found")
-    return {"message": "Item deleted successfully"}
+def delete_item(item_id: int):
+    """
+    Elimina un ítem basado en su ID.
+    """
+    items = read_data()
+    for index, item in enumerate(items):
+        if item["id"] == item_id:
+            # Eliminar el ítem de la lista
+            items.pop(index)
+            write_data(items)
+            return {"message": "Item eliminado"}
+    raise HTTPException(status_code=404, detail="Item no encontrado")
