@@ -19,7 +19,7 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
 # Configuración del JWT y autenticación
-SECRET_KEY = "your_secret_key"  # Cambiar a una clave secreta más segura
+SECRET_KEY = "your_secret_key" 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
