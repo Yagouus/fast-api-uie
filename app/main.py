@@ -44,5 +44,5 @@ def update_item(item_id: int, item: schemas.ItemUpdate, db: Session = Depends(ge
 def delete_item(item_id: int, db: Session = Depends(get_db)):
     result = crud.delete_item(db, item_id=item_id)
     if not result:
-        raise HTTPException(status_code=404, detail="Item not found")
-    return {"message": "Item deleted successfully"}
+        raise HTTPException(status_code=404, detail="Item not found in database")
+    return {"message": "Item removed successfully"}
