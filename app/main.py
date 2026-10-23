@@ -45,4 +45,4 @@ def delete_item(item_id: int, db: Session = Depends(get_db)):
     result = crud.delete_item(db, item_id=item_id)
     if not result:
         raise HTTPException(status_code=404, detail="Item not found in database")
-    return {"message": "Item deleted correctly"}
+    return {"message": "Item removed successfully"}
